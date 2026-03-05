@@ -100,7 +100,7 @@ git push -u origin main
    - `ZENDESK_API_TOKEN`
    - `DRY_RUN` (optional, set to `true` to only report without deleting)
    - `CRON_SECRET` (optional; generate with `openssl rand -hex 32`; Vercel sends it automatically on cron invocations)
-4. Deploy. The cron runs hourly (configurable in `vercel.json`).
+4. Deploy. The cron runs once daily at 9:00 AM UTC (configurable in `vercel.json`). Note: Vercel Hobby plans are limited to daily crons; Pro plans support hourly.
 
 To manually trigger: `GET https://your-app.vercel.app/api/cron?dry_run=true` (add `Authorization: Bearer <CRON_SECRET>` if `CRON_SECRET` is set).
 

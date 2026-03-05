@@ -1,22 +1,11 @@
 {
   "subjectPatterns": [
-    "password reset",
-    "reset your password",
-    "forgot password",
-    "forgot your password",
-    "reset password",
-    "password reset request",
-    "change your password"
+    "Password Reset Required for Field Agent App"
   ],
   "bodyPatterns": [
-    "reset your password",
-    "click here to reset",
-    "password reset link",
-    "forgot your password",
-    "reset your password by clicking",
-    "to reset your password",
-    "password reset request",
-    "this link to reset"
+    "Password Reset Required for Field Agent App",
+    "unsuccessful login attempt was made to your Field Agent account",
+    "automatically logged out your account and will require a password reset"
   ],
-  "minConfidence": 1.5
+  "minConfidence": 2.0
 }

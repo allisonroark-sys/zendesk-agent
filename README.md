@@ -76,9 +76,23 @@ CRON_SCHEDULE="0 */2 * * *" node src/index.js --schedule
 0 * * * * cd /path/to/Zendesk\ Agent && node src/index.js >> logs/cleaner.log 2>&1
 ```
 
+## Push to GitHub & Vercel
+
+**1. Create a new repo on GitHub** (e.g. `zendesk-password-reset-cleaner`)
+
+**2. Push from your terminal:**
+```bash
+git remote add origin https://github.com/YOUR_USERNAME/zendesk-password-reset-cleaner.git
+git push -u origin main
+```
+
+**3. Deploy on Vercel** — Import the project in [Vercel](https://vercel.com) (New Project → Import from GitHub), then add your env vars.
+
+---
+
 ## Vercel Deployment
 
-1. Push this repo to GitHub.
+1. Push this repo to GitHub (see above).
 2. Import the project in [Vercel](https://vercel.com) (New Project → Import from GitHub).
 3. Add environment variables in Vercel Project Settings:
    - `ZENDESK_SUBDOMAIN`

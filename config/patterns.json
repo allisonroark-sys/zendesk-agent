@@ -1,5 +1,22 @@
 {
-  "subjectPatterns": ["password reset", "reset your password", "forgot password"],
-  "bodyPatterns": ["reset your password", "click here to reset", "password reset link"],
+  "subjectPatterns": [
+    "password reset",
+    "reset your password",
+    "forgot password",
+    "forgot your password",
+    "reset password",
+    "password reset request",
+    "change your password"
+  ],
+  "bodyPatterns": [
+    "reset your password",
+    "click here to reset",
+    "password reset link",
+    "forgot your password",
+    "reset your password by clicking",
+    "to reset your password",
+    "password reset request",
+    "this link to reset"
+  ],
   "minConfidence": 1.5
 }

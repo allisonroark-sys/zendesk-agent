@@ -1,0 +1,5 @@
+{
+  "subjectPatterns": ["password reset", "reset your password", "forgot password"],
+  "bodyPatterns": ["reset your password", "click here to reset", "password reset link"],
+  "minConfidence": 1.5
+}

@@ -2,14 +2,6 @@
  * Debug endpoint: runs a minimal Zendesk connectivity test and returns diagnostics.
  * Visit /api/debug to diagnose why 0 tickets are found.
  */
-const axios = require('axios');
-const https = require('https');
-
-const httpsAgent = new https.Agent({
-  minVersion: 'TLSv1.2',
-  maxVersion: 'TLSv1.3',
-});
-
 function safeStringify(obj) {
   try {
     return JSON.parse(JSON.stringify(obj, (k, v) => (v === undefined ? null : v)));
@@ -48,38 +40,42 @@ module.exports = async (req, res) => {
     }
 
     const baseUrl = `https://${subdomain}.zendesk.com`;
-    const auth = { username: `${email}/token`, password: apiToken };
+    const authHeader = 'Basic ' + Buffer.from(`${email}/token:${apiToken}`).toString('base64');
 
     try {
-      const searchRes = await axios.get(`${baseUrl}/api/v2/search`, {
-        auth,
-        httpsAgent,
-        params: { query: 'type:ticket', sort_by: 'created_at', sort_order: 'desc' },
-        timeout: 15000,
+      const searchUrl = `${baseUrl}/api/v2/search?query=${encodeURIComponent('type:ticket')}&sort_by=created_at&sort_order=desc`;
+      const searchRes = await fetch(searchUrl, {
+        headers: { 'Content-Type': 'application/json', Authorization: authHeader },
       });
-      const searchTickets = (searchRes.data.results || []).filter((r) => r.result_type === 'ticket');
+      if (!searchRes.ok) {
+        throw new Error(`HTTP ${searchRes.status}`);
+      }
+      const searchData = await searchRes.json();
+      const searchTickets = (searchData.results || []).filter((r) => r.result_type === 'ticket');
       diagnostics.search = {
-        totalResults: searchRes.data.count,
+        totalResults: searchData.count,
         ticketsReturned: searchTickets.length,
         sampleSubjects: searchTickets.slice(0, 3).map((t) => t.subject),
         sampleIds: searchTickets.slice(0, 3).map((t) => t.id),
       };
     } catch (err) {
       diagnostics.errors.push({
-        search: err.response?.data?.error || err.message,
+        search: err.message,
         status: err.response?.status,
       });
     }
 
     try {
       const twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;
-      const incRes = await axios.get(`${baseUrl}/api/v2/incremental/tickets/cursor.json`, {
-        auth,
-        httpsAgent,
-        params: { start_time: twoHoursAgo, per_page: 100 },
-        timeout: 15000,
+      const incUrl = `${baseUrl}/api/v2/incremental/tickets/cursor.json?start_time=${twoHoursAgo}&per_page=100`;
+      const incRes = await fetch(incUrl, {
+        headers: { 'Content-Type': 'application/json', Authorization: authHeader },
       });
-      const incTickets = incRes.data.tickets || [];
+      if (!incRes.ok) {
+        throw new Error(`HTTP ${incRes.status}`);
+      }
+      const incData = await incRes.json();
+      const incTickets = incData.tickets || [];
       const passwordResetLike = incTickets.filter(
         (t) =>
           (t.subject || '').toLowerCase().includes('password') ||
@@ -94,7 +90,7 @@ module.exports = async (req, res) => {
       };
     } catch (err) {
       diagnostics.errors.push({
-        incremental: err.response?.data?.error || err.message,
+        incremental: err.message,
         status: err.response?.status,
       });
     }

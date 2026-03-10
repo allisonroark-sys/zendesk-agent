@@ -1,11 +1,3 @@
-const axios = require('axios');
-const https = require('https');
-
-const httpsAgent = new https.Agent({
-  minVersion: 'TLSv1.2',
-  maxVersion: 'TLSv1.3',
-});
-
 const SEARCH_ENDPOINT = '/api/v2/search';
 const INCREMENTAL_ENDPOINT = '/api/v2/incremental/tickets/cursor.json';
 const DELETE_ENDPOINT = '/api/v2/tickets/destroy_many';
@@ -13,15 +5,12 @@ const BATCH_SIZE = 100;
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 
-/**
- * Sleep for a given number of milliseconds
- */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Zendesk API client for searching and deleting tickets
+ * Zendesk API client using native fetch (Node 18+)
  */
 class ZendeskClient {
   constructor(config) {
@@ -30,15 +19,10 @@ class ZendeskClient {
       throw new Error('Missing required config: subdomain, email, and apiToken');
     }
     this.baseUrl = `https://${subdomain}.zendesk.com`;
-    this.auth = {
-      username: `${email}/token`,
-      password: apiToken,
-    };
+    this.authHeader =
+      'Basic ' + Buffer.from(`${email}/token:${apiToken}`).toString('base64');
   }
 
-  /**
-   * Make a request with exponential backoff on 429
-   */
   async _request(method, path, options = {}) {
     const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
     let lastError;
@@ -46,35 +30,46 @@ class ZendeskClient {
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        const response = await axios({
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        const response = await fetch(url, {
           method,
-          url,
-          auth: this.auth,
-          httpsAgent,
-          headers: { 'Content-Type': 'application/json', ...options.headers },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: this.authHeader,
+            ...options.headers,
+          },
+          signal: controller.signal,
           ...options,
         });
-        return response.data;
-      } catch (err) {
-        lastError = err;
-        if (err.response?.status === 429 && attempt < MAX_RETRIES - 1) {
-          const retryAfter = err.response.headers['retry-after'];
+        clearTimeout(timeout);
+
+        if (response.status === 429 && attempt < MAX_RETRIES - 1) {
+          const retryAfter = response.headers.get('retry-after');
           const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : delay;
           await sleep(waitMs);
           delay *= 2;
-        } else {
+          continue;
+        }
+
+        if (!response.ok) {
+          const err = new Error(`HTTP ${response.status}`);
+          err.response = response;
           throw err;
         }
+
+        if (method === 'DELETE') return {};
+        return await response.json();
+      } catch (err) {
+        lastError = err;
+        if (attempt >= MAX_RETRIES - 1) throw err;
+        await sleep(delay);
+        delay *= 2;
       }
     }
     throw lastError;
   }
 
-  /**
-   * Search tickets matching any of the given patterns in subject or description.
-   * Also runs a general phrase search and uses Incremental Export as fallback
-   * when Search returns 0 (Search API has indexing delay for new tickets).
-   */
   async searchTicketsByPatterns(subjectPatterns, bodyPatterns) {
     const seen = new Map();
     const queries = [];
@@ -124,10 +119,6 @@ class ZendeskClient {
     return tickets;
   }
 
-  /**
-   * Fallback: fetch recent tickets via Incremental Export (bypasses Search indexing delay)
-   * and filter by patterns client-side. Fetches tickets from last 2 hours.
-   */
   async fetchRecentTicketsViaExport(subjectPatterns, bodyPatterns) {
     const twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;
     const path = `${INCREMENTAL_ENDPOINT}?start_time=${twoHoursAgo}&per_page=100`;
@@ -159,9 +150,6 @@ class ZendeskClient {
     return Array.from(seen.values());
   }
 
-  /**
-   * Delete tickets in batches of 100. Returns count of deleted tickets.
-   */
   async deleteTickets(ticketIds) {
     let deleted = 0;
     for (let i = 0; i < ticketIds.length; i += BATCH_SIZE) {

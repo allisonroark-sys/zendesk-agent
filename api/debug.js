@@ -3,6 +3,12 @@
  * Visit /api/debug to diagnose why 0 tickets are found.
  */
 const axios = require('axios');
+const https = require('https');
+
+const httpsAgent = new https.Agent({
+  minVersion: 'TLSv1.2',
+  maxVersion: 'TLSv1.3',
+});
 
 function safeStringify(obj) {
   try {
@@ -47,6 +53,7 @@ module.exports = async (req, res) => {
     try {
       const searchRes = await axios.get(`${baseUrl}/api/v2/search`, {
         auth,
+        httpsAgent,
         params: { query: 'type:ticket', sort_by: 'created_at', sort_order: 'desc' },
         timeout: 15000,
       });
@@ -68,6 +75,7 @@ module.exports = async (req, res) => {
       const twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;
       const incRes = await axios.get(`${baseUrl}/api/v2/incremental/tickets/cursor.json`, {
         auth,
+        httpsAgent,
         params: { start_time: twoHoursAgo, per_page: 100 },
         timeout: 15000,
       });

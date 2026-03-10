@@ -1,4 +1,10 @@
 const axios = require('axios');
+const https = require('https');
+
+const httpsAgent = new https.Agent({
+  minVersion: 'TLSv1.2',
+  maxVersion: 'TLSv1.3',
+});
 
 const SEARCH_ENDPOINT = '/api/v2/search';
 const INCREMENTAL_ENDPOINT = '/api/v2/incremental/tickets/cursor.json';
@@ -44,6 +50,7 @@ class ZendeskClient {
           method,
           url,
           auth: this.auth,
+          httpsAgent,
           headers: { 'Content-Type': 'application/json', ...options.headers },
           ...options,
         });

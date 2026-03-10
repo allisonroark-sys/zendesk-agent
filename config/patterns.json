@@ -1,11 +1,15 @@
 {
   "subjectPatterns": [
-    "Password Reset Required for Field Agent App"
+    "Password Reset Required for Field Agent App",
+    "Password Reset Required",
+    "Field Agent App"
   ],
   "bodyPatterns": [
     "Password Reset Required for Field Agent App",
     "unsuccessful login attempt was made to your Field Agent account",
-    "automatically logged out your account and will require a password reset"
+    "automatically logged out your account and will require a password reset",
+    "Password Reset Required",
+    "Field Agent account"
   ],
   "minConfidence": 2.0
 }

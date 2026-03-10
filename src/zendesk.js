@@ -1,6 +1,7 @@
 const axios = require('axios');
 
 const SEARCH_ENDPOINT = '/api/v2/search';
+const INCREMENTAL_ENDPOINT = '/api/v2/incremental/tickets/cursor.json';
 const DELETE_ENDPOINT = '/api/v2/tickets/destroy_many';
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 3;
@@ -64,7 +65,8 @@ class ZendeskClient {
 
   /**
    * Search tickets matching any of the given patterns in subject or description.
-   * Runs multiple searches and merges/deduplicates by ticket ID.
+   * Also runs a general phrase search and uses Incremental Export as fallback
+   * when Search returns 0 (Search API has indexing delay for new tickets).
    */
   async searchTicketsByPatterns(subjectPatterns, bodyPatterns) {
     const seen = new Map();
@@ -75,6 +77,10 @@ class ZendeskClient {
     }
     for (const pattern of bodyPatterns) {
       queries.push(`type:ticket description:"${pattern.replace(/"/g, '\\"')}"`);
+    }
+    if (subjectPatterns.length > 0) {
+      const phrase = subjectPatterns[0];
+      queries.push(`type:ticket "${phrase.replace(/"/g, '\\"')}"`);
     }
 
     for (const query of queries) {
@@ -102,6 +108,47 @@ class ZendeskClient {
       }
     }
 
+    let tickets = Array.from(seen.values());
+
+    if (tickets.length === 0) {
+      tickets = await this.fetchRecentTicketsViaExport(subjectPatterns, bodyPatterns);
+    }
+
+    return tickets;
+  }
+
+  /**
+   * Fallback: fetch recent tickets via Incremental Export (bypasses Search indexing delay)
+   * and filter by patterns client-side. Fetches tickets from last 2 hours.
+   */
+  async fetchRecentTicketsViaExport(subjectPatterns, bodyPatterns) {
+    const twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;
+    const path = `${INCREMENTAL_ENDPOINT}?start_time=${twoHoursAgo}&per_page=100`;
+    const seen = new Map();
+    let nextPath = path;
+
+    try {
+      while (nextPath) {
+        const data = await this._request('GET', nextPath);
+        const tickets = data.tickets || [];
+        for (const ticket of tickets) {
+          if (seen.has(ticket.id)) continue;
+          const subject = (ticket.subject || '').toLowerCase();
+          const description = (ticket.description || '').toLowerCase();
+          const allPatterns = [...subjectPatterns, ...bodyPatterns];
+          for (const p of allPatterns) {
+            if (subject.includes(p.toLowerCase()) || description.includes(p.toLowerCase())) {
+              seen.set(ticket.id, { ...ticket, result_type: 'ticket' });
+              break;
+            }
+          }
+        }
+        nextPath = data.after_url ? new URL(data.after_url).pathname + new URL(data.after_url).search : null;
+        if (data.end_of_stream || tickets.length === 0) break;
+      }
+    } catch (err) {
+      console.error('Incremental export fallback failed:', err.message);
+    }
     return Array.from(seen.values());
   }
 

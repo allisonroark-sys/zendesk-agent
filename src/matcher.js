@@ -35,18 +35,23 @@ function scoreTicket(ticket, subjectPatterns, bodyPatterns) {
 }
 
 /**
- * Filter tickets by minimum confidence threshold.
- * Returns array of { ticket, confidence } for tickets above threshold.
+ * Filter tickets by confidence thresholds.
+ * Returns { toDelete, needsReview }:
+ * - toDelete: tickets >= minConfidence (will be deleted)
+ * - needsReview: tickets with score > 0 but < minConfidence (matched patterns but low confidence)
  */
 function filterByConfidence(tickets, subjectPatterns, bodyPatterns, minConfidence) {
-  const results = [];
+  const toDelete = [];
+  const needsReview = [];
   for (const ticket of tickets) {
     const confidence = scoreTicket(ticket, subjectPatterns, bodyPatterns);
     if (confidence >= minConfidence) {
-      results.push({ ticket, confidence });
+      toDelete.push({ ticket, confidence });
+    } else if (confidence > 0) {
+      needsReview.push({ ticket, confidence });
     }
   }
-  return results;
+  return { toDelete, needsReview };
 }
 
 module.exports = { scoreTicket, filterByConfidence };

@@ -45,19 +45,14 @@ async function runCleanup(dryRun) {
   const tickets = await client.searchTicketsByPatterns(subjectPatterns, bodyPatterns);
   log('info', { msg: 'Search complete', candidateCount: tickets.length });
 
-  const matches = filterByConfidence(
+  const { toDelete, needsReview } = filterByConfidence(
     tickets,
     subjectPatterns,
     bodyPatterns,
     minConfidence
   );
 
-  if (matches.length === 0) {
-    log('info', { msg: 'No high-confidence password reset tickets found' });
-    return;
-  }
-
-  for (const { ticket, confidence } of matches) {
+  for (const { ticket, confidence } of toDelete) {
     log(dryRun ? 'matched' : 'deleted', {
       id: ticket.id,
       subject: ticket.subject,
@@ -65,14 +60,28 @@ async function runCleanup(dryRun) {
     });
   }
 
-  if (dryRun) {
-    log('info', { msg: 'Dry run complete - no tickets deleted', count: matches.length });
-    return;
+  for (const { ticket, confidence } of needsReview) {
+    log('needs_review', { id: ticket.id, subject: ticket.subject, confidence });
   }
 
-  const ids = matches.map((m) => m.ticket.id);
-  const deleted = await client.deleteTickets(ids);
-  log('info', { msg: 'Deletion complete', deleted });
+  let deletedCount = 0;
+  if (!dryRun && toDelete.length > 0) {
+    const ids = toDelete.map((m) => m.ticket.id);
+    deletedCount = await client.deleteTickets(ids);
+    log('info', { msg: 'Deletion complete', deleted: deletedCount });
+  } else if (dryRun && toDelete.length > 0) {
+    log('info', { msg: 'Dry run - no tickets deleted', wouldDelete: toDelete.length });
+  }
+
+  return {
+    timestamp: new Date().toISOString(),
+    dryRun,
+    candidatesFound: tickets.length,
+    deleted: deletedCount,
+    needsReviewCount: needsReview.length,
+    toDelete: toDelete.map((m) => ({ id: m.ticket.id, subject: m.ticket.subject, confidence: m.confidence })),
+    needsReview: needsReview.map((m) => ({ id: m.ticket.id, subject: m.ticket.subject, confidence: m.confidence })),
+  };
 }
 
 module.exports = { runCleanup };

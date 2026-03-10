@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zendesk Agent Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 24px; background: #f5f5f5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #333; margin-bottom: 8px; }
+    .subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+    .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .card h2 { margin: 0 0 16px; font-size: 16px; color: #333; }
+    .run { border-left: 4px solid #22c55e; padding: 12px 16px; margin-bottom: 12px; background: #f9fafb; border-radius: 4px; }
+    .run.dry { border-left-color: #f59e0b; }
+    .run .meta { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+    .run .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+    .run .stat { font-size: 13px; }
+    .run .stat strong { color: #111; }
+    .needs-review { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; }
+    .needs-review h4 { font-size: 12px; color: #dc2626; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .ticket { font-size: 13px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+    .ticket:last-child { border-bottom: none; }
+    .ticket .id { color: #6b7280; font-family: monospace; margin-right: 8px; }
+    .empty { color: #9ca3af; font-style: italic; padding: 24px; text-align: center; }
+    .error { color: #dc2626; padding: 16px; background: #fef2f2; border-radius: 4px; margin-bottom: 16px; }
+    .refresh { font-size: 14px; color: #6b7280; margin-bottom: 16px; }
+    .refresh a { color: #2563eb; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .actions button { padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; }
+    .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-dry { background: #fef3c7; color: #92400e; }
+    .btn-dry:hover:not(:disabled) { background: #fde68a; }
+    .btn-live { background: #dc2626; color: white; }
+    .btn-live:hover:not(:disabled) { background: #b91c1c; }
+    .run-result { margin-top: 12px; padding: 12px; border-radius: 6px; font-size: 14px; }
+    .run-result.success { background: #dcfce7; color: #166534; }
+    .run-result.error { background: #fee2e2; color: #991b1b; }
+    .run-result.loading { background: #f3f4f6; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Zendesk Password Reset Agent</h1>
+    <p class="subtitle">Runs daily at 6:00 AM Central. Deletes Field Agent App password reset tickets.</p>
+
+    <div class="card">
+      <h2>Manual run</h2>
+      <div class="actions">
+        <button id="btn-dry" class="btn-dry">Dry run (preview only)</button>
+        <button id="btn-live" class="btn-live">Run now (delete tickets)</button>
+      </div>
+      <div id="run-result"></div>
+    </div>
+
+    <div class="card">
+      <h2>Run history</h2>
+      <p class="refresh">Auto-refreshes every 60s. <a href="javascript:location.reload()">Refresh now</a></p>
+      <div id="runs"></div>
+    </div>
+  </div>
+
+  <script>
+    async function load() {
+      const el = document.getElementById('runs');
+      try {
+        const base = location.origin;
+        const res = await fetch(base + '/api/logs');
+        const data = await res.json();
+        const runs = data.runs || [];
+        if (runs.length === 0) {
+          el.innerHTML = '<div class="empty">No run history yet. The agent will populate this after its first run.</div>';
+          return;
+        }
+        el.innerHTML = runs.map(r => {
+          const time = new Date(r.timestamp).toLocaleString();
+          const dry = r.dryRun ? ' (dry run)' : '';
+          const reviewHtml = r.needsReview && r.needsReview.length > 0
+            ? `<div class="needs-review"><h4>Needs review (low confidence)</h4>${r.needsReview.map(t =>
+                `<div class="ticket"><span class="id">#${t.id}</span> ${escapeHtml(t.subject || '')} <span style="color:#6b7280">(score: ${t.confidence})</span></div>`
+              ).join('')}</div>`
+            : '';
+          return `<div class="run ${r.dryRun ? 'dry' : ''}">
+            <div class="meta">${time}${dry}</div>
+            <div class="stats">
+              <span class="stat"><strong>${r.deleted}</strong> deleted</span>
+              <span class="stat"><strong>${r.toDelete?.length || 0}</strong> matched</span>
+              <span class="stat"><strong>${r.needsReviewCount || 0}</strong> need review</span>
+              <span class="stat"><strong>${r.candidatesFound || 0}</strong> candidates found</span>
+            </div>
+            ${reviewHtml}
+          </div>`;
+        }).join('');
+      } catch (err) {
+        el.innerHTML = `<div class="error">Failed to load logs: ${err.message}</div>`;
+      }
+    }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+    async function runAgent(dryRun) {
+      const btnDry = document.getElementById('btn-dry');
+      const btnLive = document.getElementById('btn-live');
+      const resultEl = document.getElementById('run-result');
+      btnDry.disabled = true;
+      btnLive.disabled = true;
+      resultEl.className = 'run-result loading';
+      resultEl.textContent = 'Running…';
+      try {
+        const url = location.origin + '/api/cron' + (dryRun ? '?dry_run=true' : '');
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || res.statusText);
+        }
+        const s = data.summary || {};
+        resultEl.className = 'run-result success';
+        resultEl.textContent = dryRun
+          ? `Dry run complete. ${s.deleted || 0} would be deleted, ${s.needsReviewCount || 0} need review.`
+          : `Run complete. ${s.deleted || 0} deleted, ${s.needsReviewCount || 0} need review.`;
+        load();
+      } catch (err) {
+        resultEl.className = 'run-result error';
+        resultEl.textContent = 'Error: ' + err.message;
+      } finally {
+        btnDry.disabled = false;
+        btnLive.disabled = false;
+      }
+    }
+
+    document.getElementById('btn-dry').onclick = () => runAgent(true);
+    document.getElementById('btn-live').onclick = () => {
+      if (confirm('This will delete matching tickets from Zendesk. Continue?')) {
+        runAgent(false);
+      }
+    };
+
+    load();
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>

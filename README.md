@@ -99,10 +99,15 @@ git push -u origin main
    - `ZENDESK_EMAIL`
    - `ZENDESK_API_TOKEN`
    - `DRY_RUN` (optional, set to `true` to only report without deleting)
-   - `CRON_SECRET` (optional; generate with `openssl rand -hex 32`; Vercel sends it automatically on cron invocations)
-4. Deploy. The cron runs once daily at 9:00 AM UTC (configurable in `vercel.json`). Note: Vercel Hobby plans are limited to daily crons; Pro plans support hourly.
+4. **Configure Firestore** (for dashboard logs): Create a [Firebase project](https://console.firebase.google.com) → enable Firestore Database → Project Settings → Service Accounts → Generate new private key. Add these to Vercel env vars:
+   - `FIREBASE_PROJECT_ID` — from the JSON key
+   - `FIREBASE_CLIENT_EMAIL` — from the JSON key
+   - `FIREBASE_PRIVATE_KEY` — the full `private_key` value (paste as-is; Vercel handles multiline)
+5. Deploy. The cron runs once daily at 6:00 AM Central (12:00 UTC). Note: Vercel Hobby plans are limited to daily crons.
 
-To manually trigger: `GET https://your-app.vercel.app/api/cron?dry_run=true` (add `Authorization: Bearer <CRON_SECRET>` if `CRON_SECRET` is set).
+**Dashboard:** Open `https://your-app.vercel.app/` to view run history, deleted tickets, and low-confidence tickets that need review.
+
+To manually trigger: `GET https://your-app.vercel.app/api/cron?dry_run=true`
 
 ## Requirements
 

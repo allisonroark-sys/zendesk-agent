@@ -2,6 +2,8 @@
  * Debug endpoint: runs a minimal Zendesk connectivity test and returns diagnostics.
  * Visit /api/debug to diagnose why 0 tickets are found.
  */
+const { fetchWithAgent } = require('../lib/httpClient');
+
 function safeStringify(obj) {
   try {
     return JSON.parse(JSON.stringify(obj, (k, v) => (v === undefined ? null : v)));
@@ -44,7 +46,7 @@ module.exports = async (req, res) => {
 
     try {
       const searchUrl = `${baseUrl}/api/v2/search?query=${encodeURIComponent('type:ticket')}&sort_by=created_at&sort_order=desc`;
-      const searchRes = await fetch(searchUrl, {
+      const searchRes = await fetchWithAgent(searchUrl, {
         headers: { 'Content-Type': 'application/json', Authorization: authHeader },
       });
       if (!searchRes.ok) {
@@ -68,7 +70,7 @@ module.exports = async (req, res) => {
     try {
       const twoHoursAgo = Math.floor(Date.now() / 1000) - 7200;
       const incUrl = `${baseUrl}/api/v2/incremental/tickets/cursor.json?start_time=${twoHoursAgo}&per_page=100`;
-      const incRes = await fetch(incUrl, {
+      const incRes = await fetchWithAgent(incUrl, {
         headers: { 'Content-Type': 'application/json', Authorization: authHeader },
       });
       if (!incRes.ok) {

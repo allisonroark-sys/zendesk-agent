@@ -1,3 +1,5 @@
+const { fetchWithAgent } = require('../lib/httpClient');
+
 const SEARCH_ENDPOINT = '/api/v2/search';
 const INCREMENTAL_ENDPOINT = '/api/v2/incremental/tickets/cursor.json';
 const DELETE_ENDPOINT = '/api/v2/tickets/destroy_many';
@@ -32,7 +34,7 @@ class ZendeskClient {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30000);
-        const response = await fetch(url, {
+        const response = await fetchWithAgent(url, {
           method,
           headers: {
             'Content-Type': 'application/json',
